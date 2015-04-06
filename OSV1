@@ -72,59 +72,68 @@ let getline() be
   resultis str;
 }
 
-// Gets the users input and places the command + additional arguments in 
-// input_arr array. Right now this only looks for one argument.
-let get_usr_input(input_arr) be 
-{   
+let parse(line, cmd, arg) be
+{ let ch = "";
+  let j = 0;
   let i = 0;
-  let ch, cmd, arg = "";
 
-  // fill the cmd 
+  out("line = %s \n", line);
+
   while true do {
-     
-    ch := inch();
-    // out ("%d: %08x \n", i, ch);     
-    test ch = ' ' then   
-    { 
-      byte i of cmd := 0;
-      break;
-    }
 
-    else test ch = '\n' then 
-    { 
-      input_arr ! 1 := "";
-      byte i of cmd := 0;
-      input_arr ! 0 := cmd;
+    ch := byte i of line;
+//    out("CMD : %d = %s\n", i, ch);
 
-      resultis 0
-    }
-    else 
+    test ch = ' ' then
     {
-      byte i of cmd := ch;
+      byte i of cmd ! 0 := 0;
+      break
+    }
+
+    else test ch = '\n' then
+    {
+      byte i of cmd ! 0 := 0;
+      arg := "";
+      // input_arr ! 0 := cmd;
+      // input_arr ! 1 := arg;
+      // resultis input_arr
+      resultis 0;
+    }
+
+    else
+    {
+      byte i of cmd ! 0 := ch;
       i +:= 1
     }
-  } 
+  }
 
-  // out("cmdr: %s \n", input_arr ! 0);
-  input_arr ! 0 := cmd;
+  while true do {
 
-  i := 0;
+    ch := byte i of line;
 
-  // fill the argument
-  while true do { 
-    ch := inch();
-
-    if ch = '\n' \/ ch = ' ' \/ ch = 0 then 
+    test ch = ' ' then
     {
-      byte i of arg := 0;
-      break;
+      byte j of arg ! 0 := 0;
+      break
     }
-    
-    byte i of arg := ch; 
-    i +:= 1;
-  } 
-  
-  input_arr ! 1 := arg;
+
+    else test ch = '\n' then
+    {
+      byte j of arg! 0 := 0;
+      // input_arr ! 0 := cmd;
+      // input_arr ! 1 := arg;
+      // resultis input_arr
+      resultis 0;
+    }
+
+    else
+    {
+      byte j of arg ! 0:= ch;
+//      out("ARG ! %d = %s\n", i, ch);
+      i +:= 1;
+      j +:= 1
+    }
+  }
 }
 
 // This could be used to make the input system non case sensitive.
@@ -145,18 +154,25 @@ let to_upper(s) be {
   
 // Get user input and process it.
 let process_cmd() be {
-  let cmd, arg, input = "";
-  // let input_arr = vec(2);  // arr ! 0 = cmd, arr ! 1 = arg;
+  let cmd = vec(5);
+  let arg = vec(5);
+  let input = vec(7);
+  let input_arr = vec(10);  // arr ! 0 = cmd, arr ! 1 = arg;
 
   while true do {
     out("$ ");    
     // input := get_usr_input(input_arr);   // Get raw input from user.
 
-    cmd := get_string();
-    out("cmd: %s \n", cmd);
-  
-    arg := get_string();
+    // cmd := get_string();
+    // out("cmd: %s \n", cmd);
+    input := getline();
+    out ("input: %s \n", input!0);
+    parse(input, cmd, arg);
+
+    
+    // arg := get_string();
     out("arg: %s \n", arg);
+    out("cmd: %s \n", cmd);
 
     test strcmp(cmd, "echo") then 
       echo(arg)
@@ -172,8 +188,16 @@ let process_cmd() be {
   }  
 }
 
+let change(mp) be {
+  mp ! 0 := "blah";
+
+}
+
 let start() be 
 {
+  // let p = vec(3);
+  // change(p);
+  // out("changed: %s \n", p ! 0);
   // let heap = vec(10000);
   // init(heap, 10000);
   process_cmd(); 
