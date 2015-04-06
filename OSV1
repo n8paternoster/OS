@@ -47,26 +47,28 @@ let strcmp(a, b) be {
 
 let getline() be
 { let ch = 0;
-  let str = "";
+  let str = vec(7);
   let i = 0;
 
   while true do {
 
     ch := inch();
-    out ("%d: %08x \n", i, str ! 0);
+    // out ("%d: %08x \n", i, str ! 0 ! 1);
     test ch = '\n' then
     {
-      byte i of str := 0;
+      byte i of str ! 0 := 0;
+      // out("iget cmd: %s \n", str ! 0);
+
       resultis str;
     }
-
+  
     else
     {
-      byte i of str := ch;
+      byte i of str ! 0 := ch;
       i +:= 1
     }
   }
-
+  
   resultis str;
 }
 
