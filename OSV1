@@ -45,28 +45,27 @@ let strcmp(a, b) be {
    resultis 0;
 }
 
-let get_string() be 
+let getline() be
 { let ch = 0;
   let str = "";
   let i = 0;
 
   while true do {
-     
+
     ch := inch();
-    out ("loop \n");
-    out ("%d: %08x \n", i, str!0);     
-    test ch = ' ' \/ ch = '\n' then   
-    { 
+    out ("%d: %08x \n", i, str ! 0);
+    test ch = '\n' then
+    {
       byte i of str := 0;
       resultis str;
     }
 
-    else 
+    else
     {
       byte i of str := ch;
       i +:= 1
     }
-  } 
+  }
 
   resultis str;
 }
