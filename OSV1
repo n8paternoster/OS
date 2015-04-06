@@ -1,17 +1,14 @@
-
-
-
 import "io"
 import "basic"
-
+ 
 // Displays user input on screen.
-let echo(input) be
-{
+let echo(input) be 
+{ 
   // TODO: Real echo gets rid of quotation marks.
   out("%s \n", input);
 }
 
-let time() be
+let time() be 
 {
   let v = vec(7);
   let t = seconds();
@@ -29,16 +26,16 @@ let exit() be {
 }
 
 // Compares strings. Returns 1 if equal, 0 if not.
-let strcmp(a, b) be {
+let strcmp(a, b) be { 
 
-  let i = 0;
+  let i = 0; 
 
-   while true do {
-     test byte i of a <> byte i of b then
+   while true do { 
+     test byte i of a <> byte i of b then    
        resultis 0
 
-     // If at the end of string, then the strings are equal.
-     else test byte i of a = 0  /\ byte i of b = 0 then
+     // If at the end of string, then the strings are equal.     
+     else test byte i of a = 0  /\ byte i of b = 0 then  
        resultis 1
 
      else
@@ -48,61 +45,64 @@ let strcmp(a, b) be {
    resultis 0;
 }
 
-let get_string() be
+let get_string() be 
 { let ch = 0;
   let str = "";
   let i = 0;
 
   while true do {
-
+     
     ch := inch();
-    // out ("%d: %08x \n", i, str!0);
-    test ch = ' ' \/ ch = '\n' then
-    {
+    out ("loop \n");
+    out ("%d: %08x \n", i, str!0);     
+    test ch = ' ' \/ ch = '\n' then   
+    { 
       byte i of str := 0;
       resultis str;
     }
 
-    else
+    else 
     {
       byte i of str := ch;
       i +:= 1
     }
-  }
+  } 
 
   resultis str;
 }
-// Gets the users input and places the command + additional arguments in
+
+// Gets the users input and places the command + additional arguments in 
 // input_arr array. Right now this only looks for one argument.
-let get_usr_input(input_arr) be
-{
+let get_usr_input(input_arr) be 
+{   
   let i = 0;
   let ch, cmd, arg = "";
 
-  // fill the cmd
+  // fill the cmd 
   while true do {
-
+     
     ch := inch();
-    // out ("%d: %08x \n", i, ch);
-    test ch = ' ' then
-    {
+    // out ("%d: %08x \n", i, ch);     
+    test ch = ' ' then   
+    { 
       byte i of cmd := 0;
       break;
     }
 
-    else test ch = '\n' then
-    { input_arr ! 1 := "";
+    else test ch = '\n' then 
+    { 
+      input_arr ! 1 := "";
       byte i of cmd := 0;
       input_arr ! 0 := cmd;
 
       resultis 0
     }
-    else
+    else 
     {
       byte i of cmd := ch;
       i +:= 1
     }
-  }
+  } 
 
   // out("cmdr: %s \n", input_arr ! 0);
   input_arr ! 0 := cmd;
@@ -110,19 +110,19 @@ let get_usr_input(input_arr) be
   i := 0;
 
   // fill the argument
-  while true do {
+  while true do { 
     ch := inch();
 
-    if ch = '\n' \/ ch = ' ' \/ ch = 0 then
+    if ch = '\n' \/ ch = ' ' \/ ch = 0 then 
     {
       byte i of arg := 0;
       break;
     }
-
-    byte i of arg := ch;
+    
+    byte i of arg := ch; 
     i +:= 1;
-  }
-
+  } 
+  
   input_arr ! 1 := arg;
 }
 
@@ -131,53 +131,49 @@ let to_upper(s) be {
   let end = strlen(s);
   let i = 0;
   let ch = 0;
-  while i < end do {
+  while i < end do { 
     out ("%d: %d\n", i, byte i of s);
-    if byte i of s >= 97 then
-      if byte i of s <= 122 then
+    if byte i of s >= 97 then 
+      if byte i of s <= 122 then 
         byte i of s -:= 32;
     i +:= 1;
   }
 
   out("big: %s \n", s);
 }
-
+  
 // Get user input and process it.
 let process_cmd() be {
   let cmd, arg, input = "";
-  let input_arr = vec(2);  // arr ! 0 = cmd, arr ! 1 = arg;
+  // let input_arr = vec(2);  // arr ! 0 = cmd, arr ! 1 = arg;
 
   while true do {
-    out("$ ");
+    out("$ ");    
     // input := get_usr_input(input_arr);   // Get raw input from user.
 
-    arg := get_string();
-    out("ig: %s \n", arg);
-
     cmd := get_string();
-    out("ig: %s \n", cmd);
+    out("cmd: %s \n", cmd);
+  
+    arg := get_string();
+    out("arg: %s \n", arg);
 
-    test strcmp(cmd, "echo") then
+    test strcmp(cmd, "echo") then 
       echo(arg)
-    else test strcmp(cmd, "exit") then
+    else test strcmp(cmd, "exit") then 
       exit()
-    else test strcmp(cmd, "time") then
+    else test strcmp(cmd, "time") then 
       time()
-    else test strcmp(cmd, "") then
+    else test strcmp(cmd, "") then 
       loop
     else
       out("%s: Command not found. \n", cmd);
-    input_arr ! 0 := 0;
-    input_arr ! 1 := 0;
 
-  }
+  }  
 }
 
-let start() be
+let start() be 
 {
   // let heap = vec(10000);
   // init(heap, 10000);
-  process_cmd();
+  process_cmd(); 
 }
-
-
