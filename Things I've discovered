@@ -1,0 +1,4 @@
+We're getting a page fault on 
+ch := inch() 
+
+the very first time. Maybe we have to figure out page faults first?
