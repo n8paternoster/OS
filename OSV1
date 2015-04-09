@@ -7,7 +7,7 @@ manifest
   pn_bits = selector 11 : 11,
   offset_bits = selector 11 : 0,
   tok_size = 12,
-  in_size = 25
+  in_size = 25  // inch() takes 100 bytes by default, 25 words = 100 bytes
 }
 
 manifest
