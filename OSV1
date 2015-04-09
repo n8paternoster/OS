@@ -1,6 +1,21 @@
 import "io"
 import "basic"
- 
+
+// makes change to VM easier.
+manifest
+{ ptn_bits = selector 10 : 22,
+  pn_bits = selector 11 : 11,
+  offset_bits = selector 11 : 0,
+  tok_size = 12,
+  in_size = 25
+}
+
+manifest
+{ iv_none = 0,        iv_memory = 1,      iv_pagefault = 2,   iv_unimpop = 3,
+  iv_halt = 4,        iv_divzero = 5,     iv_unwrop = 6,      iv_timer = 7,
+  iv_privop = 8,      iv_keybd = 9,       iv_badcall = 10,    iv_pagepriv = 11,
+  iv_debug = 12,      iv_intrfault = 13 }
+
 // Displays user input on screen.
 let echo(input) be 
 { 
@@ -17,12 +32,47 @@ let time() be
   out("month: %d \n", v ! 1);
   out("day: %d \n", v ! 2);
   out("year: %d \n", v ! 0);
-  // freevec(v);
 }
 
 // Exits the prompt.
 let exit() be {
   finish;
+}
+
+let run(name) be { 
+
+  // Load in the file you wanna run.
+  let r = devctl(DC_TAPE_LOAD, 1, name, 'R');
+  out ("r: %s" , name);
+
+  if r < 0 then { 
+    out("error %d for loading tape '%s'\n", r, name);
+    finish 
+  }
+  
+  /*
+  // Load the program into memory
+  while true do
+  { 
+     r := devctl(DC_TAPE_READ, 1, addr);
+     if r < 0 then
+     { out("error %d while reading tape '%s'\n", r, name);
+       finish 
+     }
+     n +:= r;
+     avail -:= 1;
+     addr +:= 128;
+     if r < 128 then break;
+     if avail = 0 then 
+     { 
+       page := getpage() << 11;
+       ptcode ! pos := page bitor 1;
+       pos +:= 1;
+       addr := page;
+       avail := 16 
+     } 
+  }
+  */
 }
 
 // Compares strings. Returns 1 if equal, 0 if not.
@@ -45,160 +95,179 @@ let strcmp(a, b) be {
    resultis 0;
 }
 
-let getline() be
-{ let ch = 0;
-  let str = vec(7);
-  let i = 0;
-
-  while true do {
-
-    ch := inch();
-    // out ("%d: %08x \n", i, str ! 0 ! 1);
-    test ch = '\n' then
-    {
-      byte i of str ! 0 := 0;
-      // out("iget cmd: %s \n", str ! 0);
-
-      resultis str;
-    }
-  
-    else
-    {
-      byte i of str ! 0 := ch;
-      i +:= 1
-    }
-  }
-  
-  resultis str;
-}
-
-let parse(line, cmd, arg) be
-{ let ch = "";
+let parse(in_buff, cmd, arg) be
+{ 
+  let ch;
   let j = 0;
   let i = 0;
 
-  out("line = %s \n", line);
-
-  while true do {
-
-    ch := byte i of line;
-//    out("CMD : %d = %s\n", i, ch);
+  while true do 
+  {
+    ch := byte i of in_buff;
 
     test ch = ' ' then
     {
-      byte i of cmd ! 0 := 0;
+      byte i of cmd := 0;
+      i +:= 1;     
       break
     }
 
-    else test ch = '\n' then
+    else test ch = '\n' \/ ch = 0 then
     {
-      byte i of cmd ! 0 := 0;
+      byte i of cmd := 0;
+      // out(" newline \n");
       arg := "";
-      // input_arr ! 0 := cmd;
-      // input_arr ! 1 := arg;
-      // resultis input_arr
-      resultis 0;
+      i +:= 1;
+      arg := "blank";
+      break;
     }
 
     else
     {
-      byte i of cmd ! 0 := ch;
+      byte i of cmd := ch;
       i +:= 1
     }
   }
-
+  
   while true do {
 
-    ch := byte i of line;
-
+    ch := byte i of in_buff;
+   
     test ch = ' ' then
     {
-      byte j of arg ! 0 := 0;
+      byte j of arg := 0;
+
       break
     }
 
-    else test ch = '\n' then
+    else test ch = 0 then
     {
-      byte j of arg! 0 := 0;
-      // input_arr ! 0 := cmd;
-      // input_arr ! 1 := arg;
-      // resultis input_arr
-      resultis 0;
+      byte j of arg := 0;
+
+      break
     }
 
     else
-    {
-      byte j of arg ! 0:= ch;
-//      out("ARG ! %d = %s\n", i, ch);
+    {      
+      byte j of arg := ch;
+
       i +:= 1;
       j +:= 1
     }
   }
 }
 
-// This could be used to make the input system non case sensitive.
-let to_upper(s) be {
-  let end = strlen(s);
+let getline(in_buff) be
+{ 
   let i = 0;
-  let ch = 0;
-  while i < end do { 
-    out ("%d: %d\n", i, byte i of s);
-    if byte i of s >= 97 then 
-      if byte i of s <= 122 then 
-        byte i of s -:= 32;
-    i +:= 1;
-  }
-
-  out("big: %s \n", s);
-}
-  
-// Get user input and process it.
-let process_cmd() be {
-  let cmd = vec(5);
-  let arg = vec(5);
-  let input = vec(7);
-  let input_arr = vec(10);  // arr ! 0 = cmd, arr ! 1 = arg;
 
   while true do {
-    out("$ ");    
-    // input := get_usr_input(input_arr);   // Get raw input from user.
 
-    // cmd := get_string();
-    // out("cmd: %s \n", cmd);
-    input := getline();
-    out ("input: %s \n", input!0);
-    parse(input, cmd, arg);
+    let ch = inch();
 
+    test ch = '\n' then
+    {
+      byte i of in_buff := 0;
+      break;
+    }
+  
+    else
+    {
+      byte i of in_buff := ch;
+      i +:= 1
+    }
+  }
+} 
+
+let clear_input() be { 
+
+  let ch;
+
+  while ch <> 0 do {
+
+    ch := inch();
+    out("CLEARING: %c \n", ch);
+
+  }
+
+}
+
+// Get user input and process it.
+let process_cmd() be {
+
+  let tok_size = in_size;
+  let cmd = vec tok_size;
+  let arg = vec tok_size;
+  let i = 0;
+  let in_buff = vec 256; 
+
+  while true do {
+    out("$ ");   
     
-    // arg := get_string();
-    out("arg: %s \n", arg);
-    out("cmd: %s \n", cmd);
+    getline(in_buff);
+    //out ("line: %s \n", in_buff);
+    parse(in_buff, cmd, arg);  
 
-    test strcmp(cmd, "echo") then 
+    test strcmp(cmd , "echo") then 
       echo(arg)
     else test strcmp(cmd, "exit") then 
       exit()
     else test strcmp(cmd, "time") then 
       time()
+    else test strcmp(cmd, "run") then
+      run(arg)
     else test strcmp(cmd, "") then 
       loop
     else
-      out("%s: Command not found. \n", cmd);
+      out("%s: Command not found. \n", cmd);  
 
+
+    while i < 10 do { 
+      byte i of cmd := 0;
+      byte i of arg := 0;
+      byte i of in_buff := 0;
+      i +:= 1;
+    }
+  
   }  
 }
 
-let change(mp) be {
-  mp ! 0 := "blah";
+// Handles page faults.
+let ihandle_pf(intcode, address, info, pc) be 
+{ 
+  let ptn = ptn_bits from address,  // page table number
+       pn = pn_bits from address,   // page number
+      off = offset_bits from address;
 
+  let pt_physaddr = pgdir_va ! ptn >> 11;  // page table phys add
+
+  out("HANDLING PF");
+
+  out("Page Fault for %08x: PT:%d, PN:%d, OFF:%d\n", address, ptn, pn, off);
+  out("PC was %08x = %d\n", pc, pc); 
+  out("relevant page table is phys page %d\n", pt_physaddr);
+
+  ptspec_va ! spec_p1e := (pt_physaddr << 11) bitor 1;
+  p1_va ! pn := (13 << 11) bitor 1;    // p1_va is a handy page
+
+  // ireturn 
+  finish;
+}
+
+// Sets up interrupt handling.
+let setup_ih() be { 
+  intvec_va ! iv_pagefault := ihandle_pf;
+
+  // This ensures that interrupts are not ignored. 
+  assembly
+  { getsr r1, $flags
+    cbit      $ip
+    setsr r1, $flags 
+  }
 }
 
 let start() be 
-{
-  // let p = vec(3);
-  // change(p);
-  // out("changed: %s \n", p ! 0);
-  // let heap = vec(10000);
-  // init(heap, 10000);
-  process_cmd(); 
+{ 
+  setup_ih();
+  process_cmd();
 }
