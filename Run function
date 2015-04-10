@@ -1,0 +1,62 @@
+let run(name) be { 
+  let ptcode, n, avail, pos, addr, page;
+
+  // Load in the file you wanna run.
+  let r = devctl(DC_TAPE_LOAD, 1, name, 'R');
+  out("r: %s \n" , name);
+
+  if r < 0 then { 
+    out("error %d for loading tape '%s'\n", r, name);
+    finish 
+  }
+  
+  
+  n := 0;
+  avail := 8;
+  pos := 0x7FF;			// top of the code page table
+  // ptcode := pgdir_va ! 0x200;	// the code page table is here in the page directory
+
+  out("pgdir_va: %x\n", pgdir_va); 
+  out("PTCODE: %x \n", ptcode);
+
+  addr := infopage ! ifp_freelistptr;	// the address to the first free page
+  out("ptspec: %x\n", ptspec_va);
+  out("freelistptr: %d\n", ifp_freelistptr);
+  out("Initial addr to read to: %x\n", addr);
+  out("bp 2\n");
+
+  ptcode ! pos := addr bitor 1;	// the first entry in the code pt = the first free page
+  pos -:= 1;			// the pages grow down from the top of the code pt
+  
+  // Load the program into memory
+  while true do
+  { 
+  out("bp 3\n");
+     r := devctl(DC_TAPE_READ, 1, addr);
+     if r < 0 then
+     { out("error %d while reading tape '%s'\n", r, name);
+       finish 
+     }
+
+     n +:= r;
+     avail -:= 1;
+     addr -:= 128;
+     out("Address: %x\n", addr);
+     out("Total bytes read so far: %d\n", n);
+     out("Avail: %d\n", avail);
+     if r < 128 then break;
+     if avail = 0 then		// need a new page
+     { 
+       out("bp 4\n");
+       (infopage ! ifp_freelistptr) +:= 0x1;
+       out("New page address: %x", infopage ! ifp_freelistptr);
+       page := infopage ! ifp_freelistptr;
+//       ptcode ! pos := page bitor 1;
+       pos -:= 1;
+       addr := page;
+       avail := 16 
+     } 
+  }
+
+  out("%d bytes, %d pages of '%s' loaded\n", n, 2047-pos, name);
+}
