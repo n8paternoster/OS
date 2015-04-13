@@ -1,0 +1,26 @@
+let getpage() be { 
+  let new_page = infopage ! ifp_freelistptr bitor 1;
+  out ("new page: %x \n", new_page);
+  infopage ! ifp_freelistnum -:= 1;  // decrement number of freepages
+  out ("pages left: %d \n", infopage ! ifp_freelistnum);
+  infopage ! ifp_freelistptr +:= 0x800;
+  
+  resultis new_page
+}
+
+let pp_to_vm() be { 
+
+  let p_addr = 0x80001900; 
+  
+  let ptn = ptn_bits from p_addr;     // get page table number
+  let pn = pn_bits from p_addr;       // get page number
+  let pt_physaddr = pgdir_va ! ptn >> 11;
+  out("page table is phys page %d\n", pt_physaddr);
+  ptspec_va ! spec_p1e := (pt_physaddr << 11) bitor 1;
+  p1_va ! pn := (13 << 11) bitor 1;
+
+  outs("storing...");
+  ! p_addr := 123;
+  outs("...stored \n");
+  out("%d\n", ! p_addr);
+}
