@@ -1,0 +1,95 @@
+let run(name) be { 
+  let n, avail, pos, addr, page, init_addr;
+  let pt_userCode, pt_userStack; 
+  let ptn, pn, pt_physaddr;
+
+  // Load in the file you wanna run.
+  let r = devctl(DC_TAPE_LOAD, 1, name, 'R');
+  out("r: %s \n" , name);
+
+  if r < 0 then { 
+    out("error %d for loading tape '%s'\n", r, name);
+    finish 
+  }
+
+  pt_userCode := 0x00000000;
+  pt_userStack := 0x7FFFFFFF;
+
+  // Set up the user code page table
+  page := getPhysPageNum();
+  ptn := ptn_bits from pt_userCode;
+  pn := pn_bits from pt_userCode;
+  pt_physaddr := pgdir_va ! ptn >> 11;
+  ptspec_va ! spec_p1e := (pt_physaddr << 11) bitor 1;
+  p1_va ! pn := (page << 11) bitor 1;  
+  
+  // Set up the user stack page table
+  page := getPhysPageNum();
+  ptn := ptn_bits from pt_userStack;
+  pn := pn_bits from pt_userStack;
+  pt_physaddr := pgdir_va ! ptn >> 11;
+  ptspec_va ! spec_p1e := (pt_physaddr << 11) bitor 1;
+  p1_va ! pn := (page << 11) bitor 1;  
+
+  
+  n := 0;
+  avail := 16;
+  pos := 1;				// top of the code page table
+//  ptcode := pgdir_va ! 0x200;	// the code page table is here in the page directory
+
+//  addr := infopage ! ifp_freelistptr;	// the address to the first free page
+  init_addr := getPhysPageNum();
+  addr := init_addr << 11;
+  ptn := ptn_bits from addr;
+  pn := pn_bits from addr;
+  pt_physaddr := pgdir_va ! ptn >> 11;
+  ptspec_va ! spec_p1e := (pt_physaddr << 11) bitor 1;
+  p1_va ! pn := addr bitor 1;
+
+  out("Initial addr to read to: %x\n", init_addr);
+
+//  ptcode ! pos := addr bitor 1;	// the first entry in the code pt = the first free page
+  
+
+  // Load the program into memory
+  while true do
+  { 
+     out("bp 3\n");
+     r := devctl(DC_TAPE_READ, 1, init_addr);
+     if r < 0 then
+     { out("error %d while reading tape '%s'\n", r, name);
+       finish 
+     }
+
+     n +:= r;
+     avail -:= 1;
+     init_addr +:= 128;
+  
+     out("Address: %x\n", init_addr);
+     out("Total bytes read so far: %d\n", n);
+     out("Avail: %d\n", avail);
+  
+     if r < 128 then break;
+  
+     if avail = 0 then		// need a new page
+     { 
+       out("Getting a new page to read in code\n");
+//       (infopage ! ifp_freelistptr) +:= 0x1;
+
+       page := getPhysPageNum();
+       addr := page << 11;
+       ptn := ptn_bits from addr;
+       pn := pn_bits from addr;
+       pt_physaddr := pgdir_va ! ptn >> 11;
+       ptspec_va ! spec_p1e := (pt_physaddr << 11) bitor 1;
+       p1_va ! pn := addr bitor 1;
+       init_addr := page;       
+
+//       ptcode ! pos := page bitor 1;
+       pos +:= 1;
+       avail := 16 
+     } 
+  }
+
+  out("%d bytes, %d pages of '%s' loaded\n", n, 2047-pos, name);
+}
