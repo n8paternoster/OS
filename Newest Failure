@@ -73,8 +73,8 @@ let run(name) be {
     finish 
   }
 
-  //userStack_va := pgdir_va + 0x1FF;
-  // userCode_va := pgdir_va;
+  userStack_va := pgdir_va + 0x1FF;
+  userCode_va := pgdir_va;
   //out("userCode_va: %x \n", userCode_va);
   //out("userStack_va: %x \n", userStack_va);
 
@@ -97,7 +97,6 @@ let run(name) be {
   // Create page to write to. 
   ppn := getPhysPageNum();
   addr := (ppn << 11);
-    
   out("ppn: %x \n", ppn);
 
   // let ptn = ptn_bits from userCode_va ! 0;          
@@ -111,7 +110,7 @@ let run(name) be {
   p1_va ! 0 := addr bitor 1;
   out("p1_va: %x \n", p1_va ! 0 );
   out("INITIAL ADDR TO READ TO: %x\n", addr);
-  debug 1;
+
   
   //! addr := 1;
 
@@ -159,6 +158,17 @@ let run(name) be {
   }
 
   out("%d bytes, %d pages of '%s' loaded\n", n, 2047-pos, name);
+
+
+  assembly 
+  {
+    load   sp, 0x0000
+    loadh  sp, 0x8000 
+    load   fp, sp
+    load   r1, 0x0000
+    loadh  r1, 0x0000
+    jump   r1
+  }
 }
 
 // Get user input and process it.
