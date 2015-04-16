@@ -1,0 +1,114 @@
+import "io"
+
+export {getline, parse, strcmp}
+
+let parse(in_buff, cmd, arg) be
+{ 
+  let ch;
+  let j = 0;
+  let i = 0;
+  let k = 0;
+
+  while true do 
+  {
+    ch := byte i of in_buff;
+
+    test ch = ' ' then
+    {
+      byte i of cmd := 0;
+      i +:= 1;     
+      break
+    }
+
+    else test ch = '\n' \/ ch = 0 then
+    {
+      byte i of cmd := 0;
+      // out(" newline \n");
+      i +:= 1;
+       
+      /*
+      while k < 8 do {
+        byte k of arg := 0;
+        k +:= 1;
+      }
+      out("cleared arg: %s \n", arg);
+      */
+      break;
+    }
+
+    else
+    {
+      byte i of cmd := ch;
+      i +:= 1
+    }
+  }
+  
+  while true do {
+
+    ch := byte i of in_buff;
+   
+    test ch = ' ' then
+    {
+      byte j of arg := 0;
+
+      break
+    }
+
+    else test ch = 0 then
+    {
+      byte j of arg := 0;
+
+      break
+    }
+
+    else
+    {      
+      byte j of arg := ch;
+
+      i +:= 1;
+      j +:= 1
+    }
+  }
+}
+
+let getline(in_buff) be
+{ 
+  let i = 0;
+
+  while true do {
+
+    let ch = inch();
+
+    test ch = '\n' then
+    {
+      byte i of in_buff := 0;
+      break;
+    }
+  
+    else
+    {
+      byte i of in_buff := ch;
+      i +:= 1
+    }
+  }
+} 
+
+// Compares strings. Returns 1 if equal, 0 if not.
+let strcmp(a, b) be { 
+
+  let i = 0; 
+
+   while true do { 
+     test byte i of a <> byte i of b then    
+       resultis 0
+
+     // If at the end of string, then the strings are equal.     
+     else test byte i of a = 0  /\ byte i of b = 0 then  
+       resultis 1
+
+     else
+       i +:= 1;
+   }
+
+   resultis 0;
+}
