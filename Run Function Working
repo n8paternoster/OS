@@ -1,0 +1,254 @@
+import "io"
+import "basic"
+import "string_stuff"
+
+// makes change to VM easier.
+manifest
+{ ptn_bits = selector 10 : 22,  // page table = 10 bits
+  pn_bits = selector 11 : 11,   // page = 11 bits
+  offset_bits = selector 11 : 0,  // offset = 11
+  tok_size = 12,
+  in_size = 25
+}
+
+manifest
+{ iv_none = 0,        iv_memory = 1,      iv_pagefault = 2,   iv_unimpop = 3,
+  iv_halt = 4,        iv_divzero = 5,     iv_unwrop = 6,      iv_timer = 7,
+  iv_privop = 8,      iv_keybd = 9,       iv_badcall = 10,    iv_pagepriv = 11,
+  iv_debug = 12,      iv_intrfault = 13 }
+
+// Displays user input on screen.
+let echo(input) be 
+{ 
+  // TODO: Real echo gets rid of quotation marks.
+  out("%s \n", input);
+}
+
+let time() be 
+{
+  let v = vec(7);
+  let t = seconds();
+
+  datetime(t, v);
+  out("month: %d \n", v ! 1);
+  out("day: %d \n", v ! 2);
+  out("year: %d \n", v ! 0);
+}
+
+// Exits the prompt.
+let exit() be {
+  finish
+}
+
+let getPhysPageNum() be { 
+  let new_page;
+  infopage ! ifp_freelistptr +:= 1;  // increment (not sure that's perfect)
+  new_page := infopage ! ifp_freelistptr; // Virtual Addr
+  infopage ! ifp_freelistnum -:= 1;  // decrement number of freepages
+  out("CREATING NEW PAGE \n");
+  out ("pages left: %d \n", infopage ! ifp_freelistnum);
+  
+  
+  resultis ! new_page  // returns va of new page
+}
+
+let print_page(addr) be {
+  let j = 0;
+  while j < 0x800 do {
+    out("pgdir_va ! %x: %x \n", j, addr ! j);
+    j +:= 1;
+  }
+ 
+} 
+
+let run(name) be { 
+  let n, avail, pos, addr, page, init_addr;
+  let pt_userCode, pt_userStack, pt_ppn; 
+  let userCode_va, userStack_va, userCode_pa, userStack_pa;
+  let ptn, pn, pt_physaddr, ppn, read_va;
+  
+  // Load in the file you wanna run.
+  let r = devctl(DC_TAPE_LOAD, 1, name, 'R');
+
+  if r < 0 then { 
+    out("error %d for loading tape '%s'\n", r, name);
+    finish 
+  }
+
+  // Set up the user code page table
+  ppn := getPhysPageNum();
+  userCode_pa := (ppn << 11);
+  pgdir_va ! 0 := userCode_pa bitor 1; 
+
+  // Set up the user stack page table
+  ppn := getPhysPageNum();
+  userStack_pa := (ppn << 11);
+  pgdir_va ! 0x1FF := userStack_pa bitor 1;
+
+  out ("USER STACK PT CREATED \n \n");
+
+  // Create page to write to. 
+  ppn := getPhysPageNum();
+  addr := (ppn << 11);
+  out("ppn: %x \n", ppn);
+
+
+  ptspec_va ! spec_p1e := userCode_pa bitor 1;  //physical adddress of page table
+  p1_va ! 0 := addr bitor 1;  // physical address of page
+
+  // Create stack page to write to. 
+  ppn := getPhysPageNum();
+  addr := (ppn << 11);
+  out("ppn: %x \n", ppn);
+  ptspec_va ! spec_p1e := userStack_pa bitor 1;  // physical adddress of page table
+  p1_va ! 0x7FF := addr bitor 1;                 // physical address of page
+
+  out("userCode_pa: %x \n", userCode_pa);
+
+  n := 0;         // bytes to be read.
+  avail := 16;    // number of blocks available in a page.
+  pos := 1;       // top of the code page table
+  
+  read_va := 0;  // Okay so we read into 0. I know. That sounds wrong, but 
+                 // its true. 
+
+  out("INITIAL ADDR TO READ TO: %x\n", read_va);
+  // Load the program into memory
+  // 512 bytes, 128 words
+  while true do
+  { 
+     out("NEW READ \n");
+     r := devctl(DC_TAPE_READ, 1, read_va);
+     if r < 0 then
+     { out("error %d while reading tape '%s'\n", r, name);
+       finish 
+     }
+
+     out("Address: %x\n", read_va);
+     out("Total words read so far: %d\n", n);
+     out("Avail: %d\n", avail);
+
+     n +:= r;
+     avail -:= 1;
+     read_va +:= 128;  // 128 words
+  
+     if r < 512 then break;  // This is wrong in Murrell's code
+  
+     if avail = 0 then    // need a new page
+     { 
+       out("Getting a new page to read in code\n");
+//       (infopage ! ifp_freelistptr) +:= 0x1;
+
+       ppn := getPhysPageNum();
+       addr := (ppn << 11);
+
+       ptspec_va ! spec_p1e := userCode_pa bitor 1;  //physical adddress of page table
+       p1_va ! pos := addr bitor 1;  // physical address of page
+       // p1_va ! pos := userCode_va bitor 1;     
+       
+       pos +:= 1;
+       avail := 16 
+     } 
+  }
+
+  out("%d words, %d pages of '%s' loaded\n", n /4, pos, name);
+  
+  // use user sp, fp 
+  // set sys bit to 0
+  // flagsj one is value you wanna set flags to 
+
+  assembly 
+  {
+    getsr  r1, $flags
+    cbit   r1, $sys
+
+    load   r3, 0x0000
+    loadh  r3, 0x8000 
+
+    load   r2, 0
+    setsr r3, $usrsp
+    flagsj r1, r2
+  }
+}
+
+// Get user input and process it.
+let process_cmd() be {
+
+  let tok_size = in_size;
+  let cmd = vec tok_size;
+  let arg = vec tok_size;
+
+  let i = 0;
+  let in_buff = vec in_size; 
+
+  while true do {
+    out("$ ");   
+    
+    getline(in_buff);
+    // out ("line: %s \n", in_buff);
+    parse(in_buff, cmd, arg);  
+
+    test strcmp(cmd , "echo") then 
+      echo(arg)
+    else test strcmp(cmd, "exit") then 
+      exit()
+    else test strcmp(cmd, "time") then 
+      time()
+    else test strcmp(cmd, "run") then
+      run(arg)
+    else test strcmp(cmd, "") then 
+      loop
+    else
+      out("%s: Command not found. \n", cmd);  
+    
+    while i < 12 do { 
+      byte i of cmd := 0;
+      byte i of arg := 0;
+      byte i of in_buff := 0;
+      i +:= 1;
+    }
+    
+    i := 0;
+  }  
+}
+
+// Handles page faults.
+let ihandle_pf(intcode, address, info, pc) be 
+{ 
+  let ptn = ptn_bits from address,  // page table number
+       pn = pn_bits from address,   // page number
+      off = offset_bits from address;
+
+  let pt_physaddr = pgdir_va ! ptn >> 11;  // page table phys add
+
+  out("Page Fault for %08x: PT:%d, PN:%d, OFF:%d\n", address, ptn, pn, off);
+  out("PC was %08x = %d\n", pc, pc); 
+  out("relevant page table is phys page %d\n", pt_physaddr);
+
+  ptspec_va ! spec_p1e := (pt_physaddr << 11) bitor 1;
+  p1_va ! pn := (13 << 11) bitor 1;    // p1_va is a handy page
+
+  // ireturn 
+  finish;
+}
+
+// Sets up interrupt handling.
+let setup_ih() be { 
+  intvec_va ! iv_pagefault := ihandle_pf;
+
+  // This ensures that interrupts are not ignored. 
+  assembly
+  { getsr r1, $flags
+    cbit      $ip
+    setsr r1, $flags 
+  }
+}
+
+let start() be 
+{  
+  
+  // uploading
+  setup_ih();
+  run("simple.exe");
+  // process_cmd();
+}
