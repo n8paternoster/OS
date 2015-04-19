@@ -1,13 +1,15 @@
 import "io"
-import "basic"
+import "os1"
+import "string_stuff"
 
 // makes change to VM easier.
 manifest
-{ ptn_bits = selector 10 : 22,
-  pn_bits = selector 11 : 11,
-  offset_bits = selector 11 : 0,
+{ ptn_bits = selector 10 : 22,  // page table = 10 bits
+  pn_bits = selector 11 : 11,   // page = 11 bits
+  offset_bits = selector 11 : 0,  // offset = 11
+  valid_bit = selector 1 : 0,
   tok_size = 12,
-  in_size = 25  // inch() takes 100 bytes by default, 25 words = 100 bytes
+  in_size = 25
 }
 
 manifest
@@ -15,6 +17,14 @@ manifest
   iv_halt = 4,        iv_divzero = 5,     iv_unwrop = 6,      iv_timer = 7,
   iv_privop = 8,      iv_keybd = 9,       iv_badcall = 10,    iv_pagepriv = 11,
   iv_debug = 12,      iv_intrfault = 13 }
+
+static { 
+  pt_userStack_pa, 
+  pt_userCode_pa, 
+
+  stack_pn = 0x7FF, // Next free spot in stack page table
+  code_pn = 0       // Next free spot in coe page table
+}
 
 // Displays user input on screen.
 let echo(input) be 
@@ -36,160 +46,116 @@ let time() be
 
 // Exits the prompt.
 let exit() be {
-  finish;
+  finish
+}
+
+let getPhysPageNum() be { 
+  let new_page;
+  infopage ! ifp_freelistptr +:= 1;  // increment to get new page next time.
+  new_page := infopage ! ifp_freelistptr; // Virtual Addr.
+  infopage ! ifp_freelistnum -:= 1;  // decrement number of freepages
+  // out("CREATING NEW PAGE \n");
+  // out ("pages left: %d \n", infopage ! ifp_freelistnum);
+  
+  resultis ! new_page  // returns va of new page
+}
+
+let setup_page_tables() be { 
+  // Set up the user code page table
+  let ppn = getPhysPageNum();
+  pt_userCode_pa := (ppn << 11);
+  pgdir_va ! 0 := pt_userCode_pa bitor 1; 
+
+  // Set up the user stack page table
+  ppn := getPhysPageNum();
+  pt_userStack_pa := (ppn << 11);
+  pgdir_va ! 0x1FF := pt_userStack_pa bitor 1;
+}
+
+let create_vm_page(pt_pa, stack) be { 
+  // Create page to write to. 
+  // Look for open spot in pt
+  let ppn, addr;
+  let pn = code_pn;
+  if stack then
+    pn := stack_pn;
+
+  ppn := getPhysPageNum();
+  addr := (ppn << 11);
+  // out("code ppn: %d \n", ppn);
+  ptspec_va ! spec_p1e := pt_pa bitor 1;  //physical adddress of page table
+  p1_va ! pn := addr bitor 1;  // physical address of page
+
+  test stack then
+    stack_pn -:= 1
+  else 
+    code_pn +:= 1
 }
 
 let run(name) be { 
-
+  let n, avail, pos, addr;
+  let read_va;
+  
   // Load in the file you wanna run.
   let r = devctl(DC_TAPE_LOAD, 1, name, 'R');
-  out ("r: %s" , name);
 
   if r < 0 then { 
     out("error %d for loading tape '%s'\n", r, name);
     finish 
   }
+
+  create_vm_page(pt_userCode_pa, 0);  // Put the first page in the code pt
+  create_vm_page(pt_userStack_pa, 1); // put the first page in the stack pt
+ 
+  n := 0;         // bytes to be read.
+  avail := 16;    // number of blocks available in a page.
+  pos := 1;       // top of the code page table
   
-  /*
+  read_va := 0;  // Read into address 0 since there's no offset from pgdir.
+
   // Load the program into memory
+  // 512 bytes, 128 words
   while true do
   { 
-     r := devctl(DC_TAPE_READ, 1, addr);
+     r := devctl(DC_TAPE_READ, 1, read_va);
      if r < 0 then
      { out("error %d while reading tape '%s'\n", r, name);
-       finish 
+       finish
      }
+     /*
+     out("Address: %x\n", read_va);
+     out("Total words read so far: %d\n", n);
+     out("Avail: %d\n", avail);
+     */
      n +:= r;
      avail -:= 1;
-     addr +:= 128;
-     if r < 128 then break;
-     if avail = 0 then 
+     read_va +:= 128;  // 128 words
+  
+     if r < 512 then break;  
+  
+     if avail = 0 then    // need a new code page to write to.
      { 
-       page := getpage() << 11;
-       ptcode ! pos := page bitor 1;
+       create_vm_page(pt_userCode_pa, 0);
        pos +:= 1;
-       addr := page;
        avail := 16 
      } 
   }
-  */
-}
 
-// Compares strings. Returns 1 if equal, 0 if not.
-let strcmp(a, b) be { 
-
-  let i = 0; 
-
-   while true do { 
-     test byte i of a <> byte i of b then    
-       resultis 0
-
-     // If at the end of string, then the strings are equal.     
-     else test byte i of a = 0  /\ byte i of b = 0 then  
-       resultis 1
-
-     else
-       i +:= 1;
-   }
-
-   resultis 0;
-}
-
-let parse(in_buff, cmd, arg) be
-{ 
-  let ch;
-  let j = 0;
-  let i = 0;
-
-  while true do 
+  out("%d words, %d pages of '%s' loaded\n", n /4, pos, name);
+  
+  // The assembly needed to run the user code.
+  assembly 
   {
-    ch := byte i of in_buff;
+    getsr  r1, $flags  // Put flags in r1
+    cbit   r1, $sys    // Turn off sys bit
 
-    test ch = ' ' then
-    {
-      byte i of cmd := 0;
-      i +:= 1;     
-      break
-    }
+    load   r3, 0x0000  // get usr stack ptr addr
+    loadh  r3, 0x8000  // cont with high bits
 
-    else test ch = '\n' \/ ch = 0 then
-    {
-      byte i of cmd := 0;
-      // out(" newline \n");
-      arg := "";
-      i +:= 1;
-      arg := "blank";
-      break;
-    }
-
-    else
-    {
-      byte i of cmd := ch;
-      i +:= 1
-    }
+    load   r2, 0       // Where we'll jump to (0 is where our code is)
+    setsr  r3, $usrsp  // set sp
+    flagsj r1, r2      // jump and set flags (user mode now on)
   }
-  
-  while true do {
-
-    ch := byte i of in_buff;
-   
-    test ch = ' ' then
-    {
-      byte j of arg := 0;
-
-      break
-    }
-
-    else test ch = 0 then
-    {
-      byte j of arg := 0;
-
-      break
-    }
-
-    else
-    {      
-      byte j of arg := ch;
-
-      i +:= 1;
-      j +:= 1
-    }
-  }
-}
-
-let getline(in_buff) be
-{ 
-  let i = 0;
-
-  while true do {
-
-    let ch = inch();
-
-    test ch = '\n' then
-    {
-      byte i of in_buff := 0;
-      break;
-    }
-  
-    else
-    {
-      byte i of in_buff := ch;
-      i +:= 1
-    }
-  }
-} 
-
-let clear_input() be { 
-
-  let ch;
-
-  while ch <> 0 do {
-
-    ch := inch();
-    out("CLEARING: %c \n", ch);
-
-  }
-
 }
 
 // Get user input and process it.
@@ -198,14 +164,14 @@ let process_cmd() be {
   let tok_size = in_size;
   let cmd = vec tok_size;
   let arg = vec tok_size;
+
   let i = 0;
-  let in_buff = vec 256; 
+  let in_buff = vec in_size; 
 
   while true do {
     out("$ ");   
     
     getline(in_buff);
-    //out ("line: %s \n", in_buff);
     parse(in_buff, cmd, arg);  
 
     test strcmp(cmd , "echo") then 
@@ -220,54 +186,99 @@ let process_cmd() be {
       loop
     else
       out("%s: Command not found. \n", cmd);  
-
-
-    while i < 10 do { 
+    
+    while i < 12 do { 
       byte i of cmd := 0;
       byte i of arg := 0;
       byte i of in_buff := 0;
       i +:= 1;
     }
-  
+    
+    i := 0;
   }  
 }
 
 // Handles page faults.
 let ihandle_pf(intcode, address, info, pc) be 
-{ 
+{ let starter, newadd;
+  let ppn, addr;
   let ptn = ptn_bits from address,  // page table number
        pn = pn_bits from address,   // page number
       off = offset_bits from address;
 
   let pt_physaddr = pgdir_va ! ptn >> 11;  // page table phys add
 
-  out("HANDLING PF");
-
   out("Page Fault for %08x: PT:%d, PN:%d, OFF:%d\n", address, ptn, pn, off);
   out("PC was %08x = %d\n", pc, pc); 
   out("relevant page table is phys page %d\n", pt_physaddr);
+  
+  if pt_physaddr = (pt_userStack_pa >> 11) then {  
+    // if the page fault happens on the stack
+    // Create new stack page to write to. 
+    create_vm_page(pt_userStack_pa, 1);
+    
+    ireturn;  // return to running with new page in place.
+  }
 
-  ptspec_va ! spec_p1e := (pt_physaddr << 11) bitor 1;
-  p1_va ! pn := (13 << 11) bitor 1;    // p1_va is a handy page
+  finish  // Treat page faults not on the stack as fatal.
+}
 
-  // ireturn 
+// These are pointless right now but may be useful in the future.
+let ihandle_halt() be { 
+  out("halting \n");
   finish;
 }
 
-// Sets up interrupt handling.
+let ihandle_privop() be {
+  out("this is a sys only operation \n");
+}
+
+let ihandle_badcall() be {
+  out("bad call \n");
+}
+
+// Sets up interrupt handlers.
 let setup_ih() be { 
   intvec_va ! iv_pagefault := ihandle_pf;
+  intvec_va ! iv_halt := ihandle_halt;
+  intvec_va ! iv_privop := ihandle_privop;
+  intvec_va ! iv_badcall := ihandle_badcall;
 
-  // This ensures that interrupts are not ignored. 
+  // Ensures that interrupts are not ignored.
   assembly
-  { getsr r1, $flags
+  { 
+    getsr r1, $flags
     cbit      $ip
     setsr r1, $flags 
   }
 }
 
+let sys_exit() be { 
+  out("syscall \n");
+  process_cmd();
+}
+
+let sys_echo() be { 
+  out("echoing \n");
+  ireturn;
+}
+
+let load_sys_calls() be {
+  pgates_va ! 0 := sys_exit;
+  pgates_va ! 1 := sys_echo;
+
+  assembly
+  { 
+    getsr r1, $cglen
+    add   r1, 2
+    setsr r1, $cglen 
+  }
+}
+
 let start() be 
-{ 
+{  
+  setup_page_tables();  // Puts phys page into VM for PTs
   setup_ih();
+  load_sys_calls();
   process_cmd();
 }
