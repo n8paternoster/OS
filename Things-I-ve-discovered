@@ -1,0 +1,18 @@
+Once our code begins (anything in myos), VM is on. That means that any memory access is interpretted as a virtual memory address. 
+This is important because I tried for instance to print out a physical page and it wouldn't work because as I realized later,
+when you do for instance "6001 ! 0" it tries to interpret 6001 as a virtual address and find its PT, PN, OFFSET and that won't work.
+Murrell has a note about that in his hardware doc. 
+This is kinda important since for allocating new pages I think you're supposed to look through the page table to find the next
+free page and put a free page there. I have no idea how to do that however since I can't look through a physical page with VM on.
+So for now I just keep track of an index in the page table. When you make a new page in the code PT you increment the index by one
+When you add a page to the stack PT, you decrement it by one. 
+
+This doc is worth looking at. 
+http://rabbit.eng.miami.edu/class/een521/hardware-1.pdf
+This^ is where we could've found clrpp. Also has some info on SYSCALL which we'll need for part 4.
+
+Mystery: part 5 says
+"5. Switch to user mode when running the user program."
+But we already do that...so idk what he's talking about. Maybe we're done with that, but I doubt it. 
+
+All we had to do for part 3 was allocate more pages on the stack when we page fault so we do that now. 

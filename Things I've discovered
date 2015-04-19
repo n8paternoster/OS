@@ -1,9 +1,0 @@
-We're getting a page fault on 
-ch := inch() 
-
-the very first time. Maybe we have to figure out page faults first?
-
-Also one piece of the puzzle of what the heck we're doing is that some of those pointers in the manifest
-of the startup code are function pointers. One or some of them are related to the interrupt vector. 
-So we don't have to detect interrupts, that's done for us, all we have to do is somehow set the function pointer for interrupts
-equal to our "deal with interrupts" function and our function will automatically be called when an interrupt is called.
