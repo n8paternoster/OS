@@ -1,0 +1,12 @@
+import "io"
+
+export { print_page }
+
+let print_page(addr) be {
+  let j = 0;
+  while j < 0x800 do {
+    out("%x ! %x: %x \n", addr, j, addr ! j);
+    j +:= 1;
+  }
+}
+
