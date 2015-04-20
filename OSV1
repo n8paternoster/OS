@@ -212,7 +212,7 @@ let ihandle_pf(intcode, address, info, pc) be
   out("PC was %08x = %d\n", pc, pc); 
   out("relevant page table is phys page %d\n", pt_physaddr);
   
-  if pt_physaddr = (pt_userStack_pa >> 11) then {  
+  if pt_physaddr = (pt_userStack_pa >> 11) then {             // Will the stack always consist of 1 page table? Will it ever require a 2nd page table to be created?
     // if the page fault happens on the stack
     // Create new stack page to write to. 
     create_vm_page(pt_userStack_pa, 1);
@@ -239,7 +239,7 @@ let ihandle_badcall() be {
 
 // Sets up interrupt handlers.
 let setup_ih() be { 
-  intvec_va ! iv_pagefault := ihandle_pf;
+  intvec_va ! iv_pagefault := ihandle_pf;         // Are these the only 4 interrupts we have to deal with?
   intvec_va ! iv_halt := ihandle_halt;
   intvec_va ! iv_privop := ihandle_privop;
   intvec_va ! iv_badcall := ihandle_badcall;
@@ -248,7 +248,7 @@ let setup_ih() be {
   assembly
   { 
     getsr r1, $flags
-    cbit      $ip
+    cbit      $ip     // set the interrupt flag to 0 (interrupts are being accepted)
     setsr r1, $flags 
   }
 }
@@ -267,6 +267,7 @@ let load_sys_calls() be {
   pgates_va ! 0 := sys_exit;
   pgates_va ! 1 := sys_echo;
 
+  // Increments the number of call gates by 2
   assembly
   { 
     getsr r1, $cglen
