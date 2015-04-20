@@ -1,0 +1,26 @@
+import "io"
+
+let count(a) be {
+ out("a: %d \n", a);
+ if a >= 3000 then
+    return;
+
+  count(a+1);
+}
+
+let stuff() be {
+  let i = 0;
+  while i < 4 do {
+    out("This is a program \n");
+    i +:= 1;
+  }
+}
+
+let start() be {
+  //out("This is a program \n");
+  assembly {
+    SYSCALL 0
+  }
+
+  out("this should not get printed \n");
+}
