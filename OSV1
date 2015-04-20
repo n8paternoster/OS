@@ -52,12 +52,18 @@ let exit() be {
 let getPhysPageNum() be { 
   let new_page;
   infopage ! ifp_freelistptr +:= 1;  // increment to get new page next time.
-  new_page := infopage ! ifp_freelistptr; // Virtual Addr.
-  infopage ! ifp_freelistnum -:= 1;  // decrement number of freepages
-  // out("CREATING NEW PAGE \n");
-  // out ("pages left: %d \n", infopage ! ifp_freelistnum);
+  test (infopage ! ifp_freelistptr) = (infopage ! ifp_freelistempty) then {
+    out("Out of free pages\n");
+    finish
+  }
+  else {
+    new_page := infopage ! ifp_freelistptr; // Virtual Addr.
+    infopage ! ifp_freelistnum -:= 1;  // decrement number of freepages
+    // out("CREATING NEW PAGE \n");
+    // out ("pages left: %d \n", infopage ! ifp_freelistnum);
   
-  resultis ! new_page  // returns va of new page
+    resultis ! new_page  // returns va of new page
+  }
 }
 
 let setup_page_tables() be { 
