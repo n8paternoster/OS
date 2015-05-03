@@ -81,16 +81,16 @@ let getPhysPageNum() be {
   resultis ! new_page  // returns va of new page
 }
 
-let setup_page_tables(pgdir_va) be { 
+let setup_page_tables(PCB_va) be { 
   // Set up the user code page table
   let ppn = getPhysPageNum();
   pt_userCode_pa := (ppn << 11);
-  pgdir_va ! 0 := pt_userCode_pa bitor 1; 
+  PCB_va ! 0 := pt_userCode_pa bitor 1; 
 
   // Set up the user stack page table
   ppn := getPhysPageNum();
   pt_userStack_pa := (ppn << 11);
-  pgdir_va ! 0x1FF := pt_userStack_pa bitor 1;
+  PCB_va ! 0x1FF := pt_userStack_pa bitor 1;
 }
 
 let fork() be {		// createProcess()
